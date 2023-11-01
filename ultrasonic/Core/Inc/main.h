@@ -46,7 +46,8 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define TRIG_GPIO_Port			GPIOE
+#define TRIG_Pin				GPIO_PIN_10
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
