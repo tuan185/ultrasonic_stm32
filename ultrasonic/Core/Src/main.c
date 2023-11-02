@@ -48,12 +48,14 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint8_t icFlag = 0;
-uint8_t captureIdx=0;
-uint32_t edge1Time=0, edge2Time=0;
+uint8_t idx = 0;
+uint32_t channel;
+uint8_t captureIdx[3]={0,0,0};
+uint32_t edge1Time[3]={0,0,0}, edge2Time[3]={0,0,0};
 uint8_t tx_buffer[10];
 const float speedOfSound = 0.0343/2;
-uint16_t difference;
-float distance;
+uint16_t difference[3];
+float distance[3];
 void delay (uint16_t time)
 {
 	__HAL_TIM_SET_COUNTER(&htim1, 0);
@@ -78,43 +80,59 @@ void echoPulse(){
 
 	//Start IC timer
 	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_1);
+	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_2);
+	HAL_TIM_IC_Start_IT(&htim1, TIM_CHANNEL_3);
 	//Wait for IC flag
 	uint32_t startTick = HAL_GetTick();
 	do
 	{
-		if(icFlag) break;
-	}while((HAL_GetTick() - startTick) < 500);  //500ms
+		if(icFlag == 2) break;
+	}while((HAL_GetTick() - startTick) < 100);  //500ms
 	icFlag = 0;
 	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_1);
+	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_2);
+	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_3);
 
-	//Calculate distance in cm
-	if(edge2Time > edge1Time)
-	{
-		difference = edge2Time - edge1Time;
-		distance = ((edge2Time - edge1Time) + 0.0f)*speedOfSound;
-		distance =  (distance+3.613)/14.80;
-	}
-	else
-	{
-		distance = 0.0f;
-		difference = 0;
+	for(int i = 0; i < 3; i++){
+		//Calculate distance in cm
+		if(edge2Time[i] > edge1Time[i])
+		{
+			difference[i] = edge2Time[i] - edge1Time[i];
+			distance[i] = ((edge2Time[i] - edge1Time[i]) + 0.0f)*speedOfSound;
+			//distance[i] =  (distance[i]+3.613)/14.80;
+		}
+		else
+		{
+			distance[i] = 0.0f;
+			difference[i] = 0;
+		}
 	}
 }
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
-
-	if(captureIdx == 0) //Fisrt edge
-	{
-		edge1Time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1); //__HAL_TIM_GetCounter(&htim3);//
-
-		captureIdx = 1;
+	if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1){
+		idx = 0;
+		channel = TIM_CHANNEL_1;
+	}else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
+		idx = 1;
+		channel = TIM_CHANNEL_2;
+	}else{
+		idx = 2;
+		channel = TIM_CHANNEL_3;
 	}
-	else if(captureIdx == 1) //Second edge
+
+	if(captureIdx[idx] == 0) //Fisrt edge
 	{
-		edge2Time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-		captureIdx = 0;
-		icFlag = 1;
+		edge1Time[idx] = HAL_TIM_ReadCapturedValue(htim, channel); //__HAL_TIM_GetCounter(&htim3);//
+
+		captureIdx[idx] = 1;
+	}
+	else if(captureIdx[idx] == 1) //Second edge
+	{
+		edge2Time[idx] = HAL_TIM_ReadCapturedValue(htim, channel);
+		captureIdx[idx] = 0;
+		icFlag++;
 	}
 }
 
@@ -178,7 +196,8 @@ int main(void)
   {
     /* USER CODE END WHILE */
 	  echoPulse();
-	  printf("Diff:%d,   Distance:%f\r\n",difference,distance);
+	  printf("Distance 1: %f, distance 2: %f, distance 3: %f \r\n",
+			  distance[0], distance[1], distance[2]);
 	  HAL_Delay(1000);
     /* USER CODE BEGIN 3 */
   }
@@ -280,7 +299,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 0;
+  htim1.Init.Prescaler = 7;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -310,6 +329,15 @@ static void MX_TIM1_Init(void)
   sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
   sConfigIC.ICFilter = 0;
   if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_ConfigChannel(&htim1, &sConfigIC, TIM_CHANNEL_3) != HAL_OK)
   {
     Error_Handler();
   }
