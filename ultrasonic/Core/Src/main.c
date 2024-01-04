@@ -86,14 +86,14 @@ void echoPulse(){
 	uint32_t startTick = HAL_GetTick();
 	do
 	{
-		if(icFlag == 2) break;
+		if(icFlag > 2) break;
 	}while((HAL_GetTick() - startTick) < 100);  //500ms
-	icFlag = 0;
 	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_1);
 	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_2);
 	HAL_TIM_IC_Stop_IT(&htim1, TIM_CHANNEL_3);
-
+	icFlag = 0;
 	for(int i = 0; i < 3; i++){
+		captureIdx[i] = 0;
 		//Calculate distance in cm
 		if(edge2Time[i] > edge1Time[i])
 		{
@@ -111,27 +111,32 @@ void echoPulse(){
 
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
+	if(icFlag >= 3) return;
 	if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1){
 		idx = 0;
 		channel = TIM_CHANNEL_1;
 	}else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2){
 		idx = 1;
 		channel = TIM_CHANNEL_2;
-	}else{
+	}else if(htim->Channel == HAL_TIM_ACTIVE_CHANNEL_3){
 		idx = 2;
 		channel = TIM_CHANNEL_3;
+	}else{
+		return;
 	}
-
 	if(captureIdx[idx] == 0) //Fisrt edge
 	{
 		edge1Time[idx] = HAL_TIM_ReadCapturedValue(htim, channel); //__HAL_TIM_GetCounter(&htim3);//
-
+//		printf("first edge of %d ultrasonic: %d\r\n", idx, edge1Time[idx]);
 		captureIdx[idx] = 1;
+		__HAL_TIM_SET_CAPTUREPOLARITY(htim, channel, TIM_INPUTCHANNELPOLARITY_FALLING);
 	}
 	else if(captureIdx[idx] == 1) //Second edge
 	{
 		edge2Time[idx] = HAL_TIM_ReadCapturedValue(htim, channel);
+//		printf("second edge of %d ultrasonic: %d, icFlag: %d\r\n", idx, edge2Time[idx], icFlag);
 		captureIdx[idx] = 0;
+		__HAL_TIM_SET_CAPTUREPOLARITY(htim, channel, TIM_INPUTCHANNELPOLARITY_RISING);
 		icFlag++;
 	}
 }
@@ -299,7 +304,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 7;
+  htim1.Init.Prescaler = 15;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
